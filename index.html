@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3分鐘計時器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Roboto+Mono:wght@700&display=swap" rel="stylesheet">
+    <style>
+        /* 使用 Inter 字體作為基礎，Roboto Mono 作為計時器數字字體以獲得等寬效果 */
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* 隱藏滾動條 */
+        }
+        #timer {
+            font-family: 'Roboto Mono', monospace;
+            /* 使用 vw 單位讓字體大小根據視窗寬度縮放，確保數字巨大 */
+            font-size: clamp(8rem, 25vw, 20rem);
+            line-height: 1;
+        }
+        .dot {
+            transition: background-color 0.5s ease-in-out, transform 0.5s ease-in-out;
+        }
+        .dot.completed {
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
+
+    <!-- 主容器 -->
+    <div class="flex flex-col items-center justify-center flex-grow w-full">
+        <!-- 計時器顯示 -->
+        <div id="timer" class="font-bold text-gray-100">03:00</div>
+        
+        <!-- 狀態文字 -->
+        <div id="status" class="mt-4 text-lg text-gray-400 h-8"></div>
+    </div>
+
+    <!-- 50個進度小圓點容器 -->
+    <div class="w-full max-w-2xl mx-auto pb-8">
+        <div id="dots-container" class="flex flex-wrap justify-center gap-2 md:gap-3">
+            <!-- 小圓點將由 JavaScript 動態生成 -->
+        </div>
+    </div>
+
+    <script>
+        // --- 設定 ---
+        const DURATION_IN_SECONDS = 3 * 60; // 每個週期的時長（3分鐘）
+        const TOTAL_DOTS = 50; // 小圓點總數
+
+        // --- DOM 元素 ---
+        const timerDisplay = document.getElementById('timer');
+        const dotsContainer = document.getElementById('dots-container');
+        const statusDisplay = document.getElementById('status');
+
+        // --- 狀態變數 ---
+        let secondsRemaining = DURATION_IN_SECONDS;
+        let completedCycles = 0;
+        let timerInterval = null;
+        let allDots = [];
+
+        /**
+         * 將秒數格式化為 MM:SS 格式
+         * @param {number} seconds - 總秒數
+         * @returns {string} 格式化後的時間字串
+         */
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            const paddedMinutes = String(minutes).padStart(2, '0');
+            const paddedSeconds = String(remainingSeconds).padStart(2, '0');
+            return `${paddedMinutes}:${paddedSeconds}`;
+        }
+        
+        /**
+         * 更新計時器顯示
+         */
+        function updateTimerDisplay() {
+            timerDisplay.textContent = formatTime(secondsRemaining);
+        }
+
+        /**
+         * 更新進度圓點的狀態
+         */
+        function updateDots() {
+            if (completedCycles > 0 && completedCycles <= TOTAL_DOTS) {
+                // 找到對應的圓點並添加 'completed' class
+                const dotToUpdate = allDots[completedCycles - 1];
+                if (dotToUpdate) {
+                    dotToUpdate.classList.add('completed', 'bg-cyan-400');
+                    dotToUpdate.classList.remove('bg-gray-700');
+                }
+            }
+        }
+        
+        /**
+         * 啟動或重置計時器
+         */
+        function startTimer() {
+            // 如果已有計時器在運行，先清除
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+            
+            // 重置剩餘時間
+            secondsRemaining = DURATION_IN_SECONDS;
+            updateTimerDisplay();
+            statusDisplay.textContent = `第 ${completedCycles + 1} 次計時進行中...`;
+
+
+            timerInterval = setInterval(() => {
+                secondsRemaining--;
+                updateTimerDisplay();
+
+                // 當計時結束時
+                if (secondsRemaining < 0) {
+                    clearInterval(timerInterval);
+                    completedCycles++;
+                    
+                    // 播放一個細微的音效提示
+                    playNotificationSound();
+
+                    updateDots();
+                    
+                    if (completedCycles < TOTAL_DOTS) {
+                        // 如果還有未完成的週期，短暫延遲後開始下一個
+                        statusDisplay.textContent = `第 ${completedCycles} 次計時完成！準備開始下一次...`;
+                        setTimeout(startTimer, 2000); // 延遲2秒
+                    } else {
+                        // 所有週期都已完成
+                        statusDisplay.textContent = '恭喜！已完成全部 50 次計時。';
+                        timerDisplay.textContent = "完成";
+                    }
+                }
+            }, 1000);
+        }
+
+        /**
+         * 播放一個簡單的提示音，無需外部文件
+         */
+        function playNotificationSound() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.05);
+
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5 音高
+                oscillator.start(audioContext.currentTime);
+                
+                gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.5);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (e) {
+                console.error("無法播放音效：", e);
+            }
+        }
+
+        /**
+         * 初始化應用
+         */
+        function initialize() {
+            // 創建50個小圓點
+            for (let i = 0; i < TOTAL_DOTS; i++) {
+                const dot = document.createElement('div');
+                dot.classList.add('dot', 'w-3', 'h-3', 'md:w-4', 'md:h-4', 'rounded-full', 'bg-gray-700');
+                dotsContainer.appendChild(dot);
+                allDots.push(dot);
+            }
+
+            // 啟動第一個計時器
+            startTimer();
+        }
+
+        // 當頁面載入完成後，開始執行
+        window.onload = initialize;
+    </script>
+</body>
+</html>
